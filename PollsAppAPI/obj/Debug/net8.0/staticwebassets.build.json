@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "GUAOltQPrntkByu8W65AZ1HmjXdIGHGpzA07TEEuHEk=",
+  "Source": "PollsApp",
+  "BasePath": "_content/PollsApp",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}

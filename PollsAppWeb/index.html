@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Главная - Опросы</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      padding: 20px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 5px;
+    }
+    .poll {
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 3px;
+    }
+    .poll h3 {
+      margin: 0 0 10px;
+    }
+    .option {
+      margin-bottom: 5px;
+    }
+    button {
+      padding: 5px 10px;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    button:hover:not(:disabled) {
+      background: #0056b3;
+    }
+    a {
+      text-decoration: none;
+      color: #007bff;
+    }
+  </style>
+  <!-- Подключаем SignalR -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.0/signalr.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2>Опросы</h2>
+      <div>
+        <a href="create_poll.html">Создать опрос</a> | 
+        <a href="#" id="logout">Выйти</a>
+      </div>
+    </div>
+    <div id="polls-container">
+      <!-- Опросы будут загружены сюда -->
+    </div>
+  </div>
+
+  <script>
+    const apiBase = "https://localhost:7298/api";
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      window.location.href = 'login.html';
+    }
+
+    // Получаем список опросов с сервера
+    async function fetchPolls() {
+      try {
+        const response = await fetch(apiBase + '/polls', {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          }
+        });
+
+        const polls = await response.json();
+        renderPolls(polls);
+      } catch (error) {
+        console.error('Ошибка получения опросов:', error);
+      }
+    }
+
+    // Отрисовка опросов на странице
+    function renderPolls(polls) {
+      const container = document.getElementById('polls-container');
+      container.innerHTML = '';
+
+      polls.forEach(poll => {
+        const pollDiv = document.createElement('div');
+        pollDiv.className = 'poll';
+        pollDiv.setAttribute("data-poll-id", poll.id);
+        pollDiv.innerHTML = `<h3>${poll.title}</h3>`;
+
+        // Если пользователь уже голосовал, получаем id выбранного варианта
+        let userVotedOptionId = poll.userVote ? poll.userVote.optionId : null;
+
+        if (poll.options && poll.options.length > 0) {
+          poll.options.forEach(option => {
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'option';
+
+            // Используем поле votesCount, которое возвращает сервер
+            const voteCount = option.votesCount || 0;
+
+            optionDiv.innerHTML = `
+              <span>${option.text} (голосов: <b id="votes-${option.id}">${voteCount}</b>)</span>
+              <button id="vote-btn-${option.id}" ${userVotedOptionId ? "disabled" : ""} onclick="vote(${poll.id}, ${option.id})">
+                Голосовать
+              </button>
+            `;
+
+            pollDiv.appendChild(optionDiv);
+          });
+        }
+
+        container.appendChild(pollDiv);
+      });
+    }
+
+    // Функция голосования
+    async function vote(pollId, optionId) {
+      try {
+        const response = await fetch(apiBase + '/votes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ pollId, optionId })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          alert(result.message || 'Ошибка при голосовании');
+          return;
+        }
+
+        // Локальное обновление сразу после голосования
+        const voteCountElem = document.getElementById(`votes-${optionId}`);
+        const voteCount = parseInt(voteCountElem.textContent) + 1;
+        voteCountElem.textContent = voteCount;
+
+        const voteButton = document.getElementById(`vote-btn-${optionId}`);
+        voteButton.disabled = true;
+
+      } catch (error) {
+        console.error('Ошибка голосования:', error);
+        alert('Ошибка: ' + error.message);
+      }
+    }
+
+    window.vote = vote;
+
+    // Подключаемся к SignalR для обновления голосов в реальном времени
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl("https://localhost:7298/voteHub")
+      .withAutomaticReconnect()
+      .build();
+
+    connection.on("ReceiveResults", (pollId) => {
+      console.log("Опрос обновлён:", pollId);
+      fetchPollById(pollId);
+    });
+
+    connection.start()
+      .then(() => console.log("SignalR: подключение установлено"))
+      .catch(err => console.error("Ошибка подключения SignalR:", err));
+
+    // Логика выхода из системы
+    document.getElementById('logout').addEventListener('click', () => {
+      localStorage.removeItem('token');
+      window.location.href = 'login.html';
+    });
+
+    // Получаем обновлённые данные конкретного опроса по его id
+    async function fetchPollById(pollId) {
+      try {
+        const response = await fetch(`${apiBase}/polls/${pollId}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          }
+        });
+
+        const poll = await response.json();
+        updatePollInDOM(poll);
+      } catch (error) {
+        console.error('Ошибка получения опроса:', error);
+      }
+    }
+
+    // Обновляем конкретный опрос в DOM
+    function updatePollInDOM(poll) {
+      const pollDiv = document.querySelector(`[data-poll-id="${poll.id}"]`);
+      if (!pollDiv) return;
+
+      poll.options.forEach(option => {
+        const voteCountElem = document.getElementById(`votes-${option.id}`);
+        voteCountElem.textContent = option.votesCount || 0;
+
+        const voteButton = document.getElementById(`vote-btn-${option.id}`);
+        voteButton.disabled = poll.userVote ? true : false;
+      });
+    }
+
+    // Начальная загрузка опросов
+    fetchPolls();
+  </script>
+</body>
+</html>

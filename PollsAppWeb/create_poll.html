@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Создать опрос</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      padding: 20px;
+    }
+    .container {
+      max-width: 500px;
+      margin: auto;
+      background: #fff;
+      padding: 20px;
+      border-radius: 5px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0 10px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+    }
+    button {
+      padding: 10px;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .option-container {
+      margin-bottom: 10px;
+    }
+    a {
+      text-decoration: none;
+      color: #007bff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Создать опрос</h2>
+    <form id="create-poll-form">
+      <label for="title">Заголовок опроса:</label>
+      <input type="text" id="title" required>
+      <div id="options-container">
+        <div class="option-container">
+          <input type="text" class="option-input" placeholder="Вариант ответа" required>
+        </div>
+        <div class="option-container">
+          <input type="text" class="option-input" placeholder="Вариант ответа" required>
+        </div>
+      </div>
+      <button type="button" id="add-option">Добавить вариант</button>
+      <br><br>
+      <button type="submit">Создать опрос</button>
+    </form>
+    <br>
+    <a href="index.html">Назад к опросам</a>
+  </div>
+  <script>
+    const apiBase = "https://localhost:7298/api";
+    const token = localStorage.getItem('token');
+    if (!token) {
+      window.location.href = 'login.html';
+    }
+
+    const form = document.getElementById('create-poll-form');
+    const optionsContainer = document.getElementById('options-container');
+    const addOptionBtn = document.getElementById('add-option');
+
+    addOptionBtn.addEventListener('click', () => {
+      const div = document.createElement('div');
+      div.className = 'option-container';
+      div.innerHTML = '<input type="text" class="option-input" placeholder="Вариант ответа" required>';
+      optionsContainer.appendChild(div);
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('title').value.trim();
+      const optionInputs = document.querySelectorAll('.option-input');
+      const options = [];
+      optionInputs.forEach(input => {
+        if (input.value.trim() !== '') {
+          options.push(input.value.trim());
+        }
+      });
+      if (options.length < 2) {
+        alert('Добавьте как минимум два варианта ответа.');
+        return;
+      }
+      try {
+        const response = await fetch(apiBase + '/polls', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ title, options })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.message || 'Ошибка при создании опроса');
+        }
+        window.location.href = 'index.html';
+      } catch (error) {
+        alert('Ошибка: ' + error.message);
+      }
+    });
+  </script>
+</body>
+</html>
